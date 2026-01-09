@@ -13,6 +13,11 @@ import Skills from "./pages/Skills";
 import ProficiencyLevels from "./pages/ProficiencyLevels";
 import Assessments from "./pages/Assessments";
 import EmployeeAssignments from "./pages/EmployeeAssignments";
+import Certifications from "./pages/Certifications";
+import Trainings from "./pages/Trainings";
+import EmployeeCertifications from "./pages/EmployeeCertifications";
+import EmployeeTrainings from "./pages/EmployeeTrainings";
+import EmployeeDetail from "./pages/EmployeeDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,6 +36,11 @@ const App = () => (
           <Route path="/proficiency-levels" element={<ProficiencyLevels />} />
           <Route path="/employee-assignments" element={<EmployeeAssignments />} />
           <Route path="/assessments" element={<Assessments />} />
+          <Route path="/certifications" element={<Certifications />} />
+          <Route path="/trainings" element={<Trainings />} />
+          <Route path="/employee-certifications" element={<EmployeeCertifications />} />
+          <Route path="/employee-trainings" element={<EmployeeTrainings />} />
+          <Route path="/employee/:id" element={<EmployeeDetail />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

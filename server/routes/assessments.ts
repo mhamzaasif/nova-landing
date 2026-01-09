@@ -26,9 +26,12 @@ export const getAssessments: RequestHandler = async (req, res) => {
     const assessmentsWithItems = [];
     for (const assessment of assessments as any[]) {
       const [items] = await pool.query(`
-        SELECT ai.*, pl.level_name, pl.numeric_value
+        SELECT ai.*,
+               pl.level_name, pl.numeric_value,
+               rpl.level_name as required_level_name, rpl.numeric_value as required_numeric_value
         FROM assessment_items ai
         JOIN proficiency_levels pl ON ai.proficiency_level_id = pl.id
+        LEFT JOIN proficiency_levels rpl ON ai.required_proficiency_level_id = rpl.id
         WHERE ai.assessment_id = ?
       `, [assessment.id]);
 
@@ -66,9 +69,12 @@ export const getEmployeeAssessmentHistory: RequestHandler = async (
     const assessmentsWithItems = [];
     for (const assessment of assessments as any[]) {
       const [items] = await pool.query(`
-        SELECT ai.*, pl.level_name, pl.numeric_value
+        SELECT ai.*,
+               pl.level_name, pl.numeric_value,
+               rpl.level_name as required_level_name, rpl.numeric_value as required_numeric_value
         FROM assessment_items ai
         JOIN proficiency_levels pl ON ai.proficiency_level_id = pl.id
+        LEFT JOIN proficiency_levels rpl ON ai.required_proficiency_level_id = rpl.id
         WHERE ai.assessment_id = ?
       `, [assessment.id]);
 
@@ -179,10 +185,13 @@ export const createAssessment: RequestHandler = async (req, res) => {
         }
       }
 
+      // Store the required proficiency level at time of assessment
+      const requiredLevelId = item.required_proficiency_level_id || null;
+
       await pool.query(
-        `INSERT INTO assessment_items (assessment_id, skill_name, proficiency_level_id)
-         VALUES (?, ?, ?)`,
-        [assessmentId, item.skill_name, item.proficiency_level_id]
+        `INSERT INTO assessment_items (assessment_id, skill_id, skill_name, proficiency_level_id, required_proficiency_level_id)
+         VALUES (?, ?, ?, ?, ?)`,
+        [assessmentId, skillId, item.skill_name, item.proficiency_level_id, requiredLevelId]
       );
     }
 
@@ -199,9 +208,12 @@ export const createAssessment: RequestHandler = async (req, res) => {
     const assessment = (assessments as any[])[0];
 
     const [assessmentItems] = await pool.query(`
-      SELECT ai.*, pl.level_name, pl.numeric_value
+      SELECT ai.*,
+             pl.level_name, pl.numeric_value,
+             rpl.level_name as required_level_name, rpl.numeric_value as required_numeric_value
       FROM assessment_items ai
       JOIN proficiency_levels pl ON ai.proficiency_level_id = pl.id
+      LEFT JOIN proficiency_levels rpl ON ai.required_proficiency_level_id = rpl.id
       WHERE ai.assessment_id = ?
     `, [assessmentId]);
 
@@ -251,20 +263,59 @@ export const getAnalyticsTrends: RequestHandler = async (req, res) => {
   try {
     const pool = getPool();
 
-    // Get general trend (average proficiency across all assessments over time)
-    const [generalTrendData] = await pool.query(`
-      SELECT a.date, AVG(pl.numeric_value) as avg_proficiency
+    // Get all assessment items with their proficiency levels for calculating relative proficiency
+    const [allItems] = await pool.query(`
+      SELECT a.id as assessment_id, a.date, a.employee_id,
+             pl.numeric_value as actual_numeric_value,
+             rpl.numeric_value as required_numeric_value
       FROM assessments a
       JOIN assessment_items ai ON a.id = ai.assessment_id
       JOIN proficiency_levels pl ON ai.proficiency_level_id = pl.id
-      GROUP BY a.date
+      LEFT JOIN proficiency_levels rpl ON ai.required_proficiency_level_id = rpl.id
       ORDER BY a.date ASC
     `);
 
-    const general = (generalTrendData as any[]).map((row: any) => ({
-      date: row.date,
-      proficiency: parseFloat(row.avg_proficiency.toString()),
-    }));
+    // Calculate relative proficiency for each item
+    const itemsWithProficiency = (allItems as any[]).map((item: any) => {
+      let proficiency: number;
+
+      if (item.required_numeric_value) {
+        // Calculate as percentage of required level, capped at 100%
+        proficiency = Math.min(
+          100,
+          (item.actual_numeric_value / item.required_numeric_value) * 100
+        );
+      } else {
+        // Fallback: use actual numeric value scaled to 0-100 (assuming max level is 5)
+        proficiency = (item.actual_numeric_value / 5) * 100;
+      }
+
+      return {
+        ...item,
+        proficiency: Math.round(proficiency * 100) / 100, // Round to 2 decimal places
+      };
+    });
+
+    // Group by date for general trend
+    const generalByDate: Record<string, number[]> = {};
+    for (const item of itemsWithProficiency) {
+      if (!generalByDate[item.date]) {
+        generalByDate[item.date] = [];
+      }
+      generalByDate[item.date].push(item.proficiency);
+    }
+
+    const general = Object.entries(generalByDate)
+      .map(([date, proficiencies]) => ({
+        date,
+        proficiency:
+          Math.round(
+            (proficiencies.reduce((sum, p) => sum + p, 0) /
+              proficiencies.length) *
+              100
+          ) / 100,
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // Get employee-specific trends
     const [employees] = await pool.query(
@@ -274,26 +325,36 @@ export const getAnalyticsTrends: RequestHandler = async (req, res) => {
     const employeeTrends: Record<number, any> = {};
 
     for (const employee of employees as any[]) {
-      const [trendData] = await pool.query(`
-        SELECT a.date, AVG(pl.numeric_value) as avg_proficiency
-        FROM assessments a
-        JOIN assessment_items ai ON a.id = ai.assessment_id
-        JOIN proficiency_levels pl ON ai.proficiency_level_id = pl.id
-        WHERE a.employee_id = ?
-        GROUP BY a.date
-        ORDER BY a.date ASC
-      `, [employee.id]);
+      const employeeItems = itemsWithProficiency.filter(
+        (item: any) => item.employee_id === employee.id
+      );
+
+      // Group by date for this employee
+      const employeeByDate: Record<string, number[]> = {};
+      for (const item of employeeItems) {
+        if (!employeeByDate[item.date]) {
+          employeeByDate[item.date] = [];
+        }
+        employeeByDate[item.date].push(item.proficiency);
+      }
 
       employeeTrends[employee.id] = {
         employee: {
           id: employee.id,
           name: employee.name,
         },
-        trends: (trendData as any[]).map((row: any) => ({
-          date: row.date,
-          proficiency: parseFloat(row.avg_proficiency.toString()),
-          employeeName: employee.name,
-        })),
+        trends: Object.entries(employeeByDate)
+          .map(([date, proficiencies]) => ({
+            date,
+            proficiency:
+              Math.round(
+                (proficiencies.reduce((sum, p) => sum + p, 0) /
+                  proficiencies.length) *
+                  100
+              ) / 100,
+            employeeName: employee.name,
+          }))
+          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
       };
     }
 

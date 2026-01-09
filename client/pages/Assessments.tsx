@@ -51,22 +51,28 @@ export default function AssessmentsPage() {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [employeeRoles, setEmployeeRoles] = useState<Record<number, Role[]>>(
+    {},
+  );
   const [skills, setSkills] = useState<Skill[]>([]);
   const [levels, setLevels] = useState<ProficiencyLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
-  const [assessmentType, setAssessmentType] = useState<"employee" | "role">(
-    "employee"
-  );
   const [selectedEmployee, setSelectedEmployee] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<string>("");
   const [assessmentDate, setAssessmentDate] = useState<string>(
-    new Date().toISOString().split("T")[0]
+    new Date().toISOString().split("T")[0],
   );
   const [comments, setComments] = useState<string>("");
   const [assessmentItems, setAssessmentItems] = useState<
-    { skill_name: string; skill_id?: number; proficiency_level_id: string }[]
+    {
+      skill_name: string;
+      skill_id?: number;
+      proficiency_level_id: string;
+      required_proficiency_level_id?: number;
+      required_level_name?: string;
+    }[]
   >([{ skill_name: "", proficiency_level_id: "" }]);
   const [skillSearchQuery, setSkillSearchQuery] = useState<string>("");
   const [searchResults, setSearchResults] = useState<Skill[]>([]);
@@ -80,44 +86,86 @@ export default function AssessmentsPage() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [assessmentsRes, employeesRes, rolesRes, skillsRes, levelsRes] =
-        await Promise.all([
-          fetch("/api/assessments"),
-          fetch("/api/employees"),
-          fetch("/api/roles"),
-          fetch("/api/skills"),
-          fetch("/api/proficiency-levels"),
-        ]);
+      const [
+        assessmentsRes,
+        employeesRes,
+        rolesRes,
+        skillsRes,
+        levelsRes,
+        empRolesRes,
+      ] = await Promise.all([
+        fetch("/api/assessments"),
+        fetch("/api/employees"),
+        fetch("/api/roles"),
+        fetch("/api/skills"),
+        fetch("/api/proficiency-levels"),
+        fetch("/api/employee-roles"),
+      ]);
 
       if (
         !assessmentsRes.ok ||
         !employeesRes.ok ||
         !rolesRes.ok ||
         !skillsRes.ok ||
-        !levelsRes.ok
+        !levelsRes.ok ||
+        !empRolesRes.ok
       ) {
         throw new Error("Failed to fetch data");
       }
 
-      const [assessmentsData, employeesData, rolesData, skillsData, levelsData] =
-        await Promise.all([
-          assessmentsRes.json(),
-          employeesRes.json(),
-          rolesRes.json(),
-          skillsRes.json(),
-          levelsRes.json(),
-        ]);
+      const [
+        assessmentsData,
+        employeesData,
+        rolesData,
+        skillsData,
+        levelsData,
+        empRolesData,
+      ] = await Promise.all([
+        assessmentsRes.json(),
+        employeesRes.json(),
+        rolesRes.json(),
+        skillsRes.json(),
+        levelsRes.json(),
+        empRolesRes.json(),
+      ]);
 
       setAssessments(assessmentsData);
       setEmployees(employeesData);
       setRoles(rolesData);
       setSkills(skillsData);
       setLevels(levelsData);
+
+      // Build a map of employee roles
+      const empRolesMap: Record<number, Role[]> = {};
+      for (const employee of employeesData) {
+        empRolesMap[employee.id] = [];
+      }
+      for (const empRole of empRolesData) {
+        if (!empRolesMap[empRole.employee_id]) {
+          empRolesMap[empRole.employee_id] = [];
+        }
+        const role = rolesData.find((r: any) => r.id === empRole.role_id);
+        if (role) {
+          empRolesMap[empRole.employee_id].push(role);
+        }
+      }
+      setEmployeeRoles(empRolesMap);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
     }
+  };
+
+  const getAvailableRolesForEmployee = (employeeId: string): Role[] => {
+    if (!employeeId) return [];
+    return employeeRoles[parseInt(employeeId)] || [];
+  };
+
+  const getSkillsForRole = (roleId: string) => {
+    if (!roleId) return [];
+    const role = roles.find((r) => r.id === parseInt(roleId));
+    return role?.skills || [];
   };
 
   const handleAddItem = () => {
@@ -136,7 +184,7 @@ export default function AssessmentsPage() {
 
     try {
       const response = await fetch(
-        `/api/skills/search?query=${encodeURIComponent(query)}`
+        `/api/skills/search?query=${encodeURIComponent(query)}`,
       );
       if (!response.ok) throw new Error("Failed to search skills");
       const data = await response.json();
@@ -149,10 +197,17 @@ export default function AssessmentsPage() {
 
   const handleSelectSkill = (itemIndex: number, skill: Skill) => {
     const newItems = [...assessmentItems];
+
+    // Check if this skill is in the role's required skills
+    const roleSkills = getSkillsForRole(selectedRole);
+    const roleSkill = roleSkills.find((rs: any) => rs.skill_id === skill.id);
+
     newItems[itemIndex] = {
       ...newItems[itemIndex],
       skill_name: skill.name,
       skill_id: skill.id,
+      required_proficiency_level_id: roleSkill?.required_proficiency_level_id,
+      required_level_name: roleSkill?.level_name,
     };
     setAssessmentItems(newItems);
     setSearchResults([]);
@@ -205,24 +260,32 @@ export default function AssessmentsPage() {
   const handleUpdateItem = (
     index: number,
     field: "skill_name" | "proficiency_level_id",
-    value: string
+    value: string,
   ) => {
     const newItems = [...assessmentItems];
     newItems[index] = { ...newItems[index], [field]: value };
     setAssessmentItems(newItems);
   };
 
+  const handleEmployeeSelected = (employeeId: string) => {
+    setSelectedEmployee(employeeId);
+    setSelectedRole("");
+    setAssessmentItems([{ skill_name: "", proficiency_level_id: "" }]);
+  };
+
   const handleRoleSelected = (roleId: string) => {
     setSelectedRole(roleId);
 
     if (roleId) {
-      const role = roles.find((r) => r.id === parseInt(roleId));
-      if (role && role.skills && role.skills.length > 0) {
+      const roleSkills = getSkillsForRole(roleId);
+      if (roleSkills && roleSkills.length > 0) {
         // Auto-populate assessment items with role's required skills
-        const items = role.skills.map((rs: any) => ({
+        const items = roleSkills.map((rs: any) => ({
           skill_name: rs.skill_name,
           skill_id: rs.skill_id,
-          proficiency_level_id: rs.required_proficiency_level_id.toString(),
+          proficiency_level_id: "",
+          required_proficiency_level_id: rs.required_proficiency_level_id,
+          required_level_name: rs.level_name,
         }));
         setAssessmentItems(items);
       } else {
@@ -235,37 +298,35 @@ export default function AssessmentsPage() {
 
   const handleCreateAssessment = async () => {
     try {
-      // Validate based on assessment type
-      if (assessmentType === "employee") {
-        if (!selectedEmployee) {
-          setError("Please select an employee");
-          return;
-        }
-      } else if (assessmentType === "role") {
-        if (!selectedRole) {
-          setError("Please select a role");
-          return;
-        }
+      if (!selectedEmployee) {
+        setError("Please select an employee");
+        return;
+      }
+
+      if (!selectedRole) {
+        setError("Please select a role");
+        return;
       }
 
       if (
-        !selectedRole ||
-        assessmentItems.some((item) => !item.skill_name || !item.proficiency_level_id)
+        assessmentItems.some(
+          (item) => !item.skill_name || !item.proficiency_level_id,
+        )
       ) {
-        setError("Please fill in all required fields (role and all skill proficiencies)");
+        setError("Please fill in all skill proficiencies");
         return;
       }
 
       const payload: CreateAssessmentRequest = {
-        employee_id: parseInt(selectedEmployee || selectedRole),
+        employee_id: parseInt(selectedEmployee),
         role_id: parseInt(selectedRole),
-        assessment_type: assessmentType,
         date: assessmentDate,
         comments: comments || undefined,
         items: assessmentItems.map((item) => ({
           skill_name: item.skill_name,
           skill_id: item.skill_id,
           proficiency_level_id: parseInt(item.proficiency_level_id),
+          required_proficiency_level_id: item.required_proficiency_level_id,
         })),
       };
 
@@ -289,7 +350,6 @@ export default function AssessmentsPage() {
   };
 
   const resetForm = () => {
-    setAssessmentType("employee");
     setSelectedEmployee("");
     setSelectedRole("");
     setAssessmentDate(new Date().toISOString().split("T")[0]);
@@ -323,7 +383,7 @@ export default function AssessmentsPage() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">Assessments</h1>
             <p className="text-muted-foreground">
-              Create and view employee assessments
+              Create and view employee assessments against assigned roles
             </p>
           </div>
           <Dialog open={openDialog} onOpenChange={setOpenDialog}>
@@ -338,68 +398,76 @@ export default function AssessmentsPage() {
                 <DialogTitle>Create New Assessment</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                {/* Assessment Type Selection */}
+                {/* Employee Selection */}
                 <div>
-                  <Label htmlFor="type">Assessment Type</Label>
+                  <Label htmlFor="employee">
+                    Employee <span className="text-destructive">*</span>
+                  </Label>
                   <Select
-                    value={assessmentType}
-                    onValueChange={(value: any) => {
-                      setAssessmentType(value);
-                      setSelectedEmployee("");
-                      setSelectedRole("");
-                    }}
+                    value={selectedEmployee}
+                    onValueChange={handleEmployeeSelected}
                   >
-                    <SelectTrigger id="type">
-                      <SelectValue placeholder="Select assessment type" />
+                    <SelectTrigger id="employee">
+                      <SelectValue placeholder="Select employee" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="employee">
-                        By Employee
-                      </SelectItem>
-                      <SelectItem value="role">
-                        By Role
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Employee Selection (For "By Employee" type) */}
-                {assessmentType === "employee" && (
-                  <div>
-                    <Label htmlFor="employee">Employee</Label>
-                    <Select
-                      value={selectedEmployee}
-                      onValueChange={setSelectedEmployee}
-                    >
-                      <SelectTrigger id="employee">
-                        <SelectValue placeholder="Select employee" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {employees.map((emp) => (
-                          <SelectItem key={emp.id} value={emp.id.toString()}>
-                            {emp.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {/* Role Selection */}
-                <div>
-                  <Label htmlFor="role">Role</Label>
-                  <Select value={selectedRole} onValueChange={handleRoleSelected}>
-                    <SelectTrigger id="role">
-                      <SelectValue placeholder="Select role" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {roles.map((role) => (
-                        <SelectItem key={role.id} value={role.id.toString()}>
-                          {role.name}
+                      {employees.map((emp) => (
+                        <SelectItem key={emp.id} value={emp.id.toString()}>
+                          {emp.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Role Selection - Only shows roles assigned to the employee */}
+                <div>
+                  <Label htmlFor="role">
+                    Role <span className="text-destructive">*</span>
+                  </Label>
+                  {selectedEmployee ? (
+                    <Select
+                      value={selectedRole}
+                      onValueChange={handleRoleSelected}
+                    >
+                      <SelectTrigger id="role">
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getAvailableRolesForEmployee(selectedEmployee).length >
+                        0 ? (
+                          getAvailableRolesForEmployee(selectedEmployee).map(
+                            (role) => (
+                              <SelectItem
+                                key={role.id}
+                                value={role.id.toString()}
+                              >
+                                {role.name}
+                              </SelectItem>
+                            ),
+                          )
+                        ) : (
+                          <SelectItem value="" disabled>
+                            No roles assigned to this employee
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Select>
+                      <SelectTrigger id="role" disabled>
+                        <SelectValue placeholder="Select employee first" />
+                      </SelectTrigger>
+                    </Select>
+                  )}
+                  {selectedEmployee &&
+                    getAvailableRolesForEmployee(selectedEmployee).length ===
+                      0 && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        This employee has no assigned roles. Assign roles in the
+                        Employee Assignments page.
+                      </p>
+                    )}
                 </div>
 
                 <div>
@@ -430,6 +498,7 @@ export default function AssessmentsPage() {
                       variant="outline"
                       size="sm"
                       onClick={handleAddItem}
+                      disabled={!selectedRole}
                     >
                       <Plus className="h-4 w-4 mr-1" />
                       Add Item
@@ -442,19 +511,24 @@ export default function AssessmentsPage() {
                         className="flex gap-2 items-end p-3 border rounded-lg bg-muted/30"
                       >
                         <div className="flex-1">
-                          <Label className="text-xs mb-1 block">
-                            Skill
-                          </Label>
+                          <Label className="text-xs mb-1 block">Skill</Label>
                           {item.skill_name ? (
                             <div className="flex items-center gap-2 p-2 rounded bg-accent/20 border border-accent/30">
                               <CheckCircle className="h-4 w-4 text-accent" />
-                              <span className="text-sm font-medium">
-                                {item.skill_name}
-                              </span>
+                              <div className="flex-1">
+                                <span className="text-sm font-medium">
+                                  {item.skill_name}
+                                </span>
+                                {item.required_level_name && (
+                                  <p className="text-xs text-muted-foreground">
+                                    Required: {item.required_level_name}
+                                  </p>
+                                )}
+                              </div>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="ml-auto h-6 w-6 p-0"
+                                className="h-6 w-6 p-0"
                                 onClick={() =>
                                   handleUpdateItem(index, "skill_name", "")
                                 }
@@ -476,9 +550,7 @@ export default function AssessmentsPage() {
                                 <Button
                                   size="sm"
                                   variant="default"
-                                  onClick={() =>
-                                    handleCreateSkillInline(index)
-                                  }
+                                  onClick={() => handleCreateSkillInline(index)}
                                   className="flex-1"
                                 >
                                   Create
@@ -486,9 +558,7 @@ export default function AssessmentsPage() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() =>
-                                    setShowSkillCreator(null)
-                                  }
+                                  onClick={() => setShowSkillCreator(null)}
                                 >
                                   Cancel
                                 </Button>
@@ -524,9 +594,7 @@ export default function AssessmentsPage() {
                                     size="sm"
                                     variant="outline"
                                     className="w-full"
-                                    onClick={() =>
-                                      setShowSkillCreator(index)
-                                    }
+                                    onClick={() => setShowSkillCreator(index)}
                                   >
                                     <Plus className="h-3 w-3 mr-1" />
                                     Create "{skillSearchQuery}"
@@ -545,7 +613,7 @@ export default function AssessmentsPage() {
                               handleUpdateItem(
                                 index,
                                 "proficiency_level_id",
-                                value
+                                value,
                               )
                             }
                           >
@@ -576,9 +644,7 @@ export default function AssessmentsPage() {
                   </div>
                 </div>
 
-                {error && (
-                  <p className="text-sm text-destructive">{error}</p>
-                )}
+                {error && <p className="text-sm text-destructive">{error}</p>}
               </div>
               <DialogFooter>
                 <Button
@@ -611,7 +677,10 @@ export default function AssessmentsPage() {
               </div>
             ) : assessments.length === 0 ? (
               <div className="flex items-center justify-center h-32 text-muted-foreground">
-                <p>No assessments yet. Create your first assessment to get started.</p>
+                <p>
+                  No assessments yet. Create your first assessment to get
+                  started.
+                </p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -684,8 +753,13 @@ export default function AssessmentsPage() {
                               >
                                 <p className="font-medium">{item.skill_name}</p>
                                 <p className="text-muted-foreground">
-                                  {item.level_name}
+                                  Actual: {item.level_name}
                                 </p>
+                                {item.required_level_name && (
+                                  <p className="text-muted-foreground">
+                                    Required: {item.required_level_name}
+                                  </p>
+                                )}
                               </div>
                             ))}
                           </div>

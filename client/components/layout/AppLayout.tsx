@@ -12,6 +12,9 @@ import {
   Menu,
   X,
   UserCheck,
+  Award,
+  BookOpen,
+  UserCog,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -31,6 +34,10 @@ export default function AppLayout({ children }: AppLayoutProps) {
     { path: "/proficiency-levels", label: "Proficiency Levels", icon: Zap },
     { path: "/employee-assignments", label: "Employee Assignments", icon: UserCheck },
     { path: "/assessments", label: "Assessments", icon: ClipboardList },
+    { path: "/certifications", label: "Certifications", icon: Award },
+    { path: "/trainings", label: "Trainings", icon: BookOpen },
+    { path: "/employee-certifications", label: "Employee Certifications", icon: UserCog },
+    { path: "/employee-trainings", label: "Employee Trainings", icon: UserCog },
   ];
 
   const isActive = (path: string) => {
@@ -48,7 +55,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
       >
         <div className="flex h-full flex-col">
           {/* Logo/Brand */}
-          <div className="flex items-center justify-between border-b border-sidebar-border px-6 py-4">
+          {/* <div className="flex items-center justify-between border-b border-sidebar-border px-6 py-4">
             <Link to="/" className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <BarChart3 className="h-5 w-5 text-primary-foreground" />
@@ -61,7 +68,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             >
               <X className="h-5 w-5 text-sidebar-foreground" />
             </button>
-          </div>
+          </div> */}
 
           {/* Navigation */}
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -87,11 +94,6 @@ export default function AppLayout({ children }: AppLayoutProps) {
           </nav>
 
           {/* Footer */}
-          <div className="border-t border-sidebar-border px-3 py-4">
-            <p className="text-xs text-sidebar-foreground/60">
-              Compatibility Matrix v1.0
-            </p>
-          </div>
         </div>
       </aside>
 
@@ -100,7 +102,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
         {/* Mobile Header */}
         <div className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur md:hidden">
           <div className="flex items-center justify-between px-4 py-3">
-            <h1 className="font-bold text-foreground">MatrixPro</h1>
+            {/* <h1 className="font-bold text-foreground">MatrixPro</h1> */}
             <button
               onClick={() => setMobileMenuOpen(true)}
               className="p-2 hover:bg-muted rounded-lg"

@@ -49,9 +49,7 @@ interface RoleFormState extends CreateRoleRequest {
 export default function RolesPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
-  const [proficiencyLevels, setProficiencyLevels] = useState<
-    ProficiencyLevel[]
-  >([]);
+  const [proficiencyLevels, setProficiencyLevels] = useState<ProficiencyLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
@@ -65,9 +63,7 @@ export default function RolesPage() {
   const [searchResults, setSearchResults] = useState<Skill[]>([]);
   const [showSkillCreator, setShowSkillCreator] = useState<boolean>(false);
   const [newSkillName, setNewSkillName] = useState<string>("");
-  const [selectedSkillIndex, setSelectedSkillIndex] = useState<number | null>(
-    null,
-  );
+  const [selectedSkillIndex, setSelectedSkillIndex] = useState<number | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -112,7 +108,7 @@ export default function RolesPage() {
 
     try {
       const response = await fetch(
-        `/api/skills/search?query=${encodeURIComponent(query)}`,
+        `/api/skills/search?query=${encodeURIComponent(query)}`
       );
       if (!response.ok) throw new Error("Failed to search skills");
       const data = await response.json();
@@ -221,13 +217,8 @@ export default function RolesPage() {
           setError(`Skill at index ${i + 1} is not selected`);
           return;
         }
-        if (
-          !skill.required_proficiency_level_id ||
-          skill.required_proficiency_level_id === 0
-        ) {
-          setError(
-            `Proficiency level for "${skill.skill_name}" is not selected`,
-          );
+        if (!skill.required_proficiency_level_id || skill.required_proficiency_level_id === 0) {
+          setError(`Proficiency level for "${skill.skill_name}" is not selected`);
           return;
         }
       }
@@ -375,8 +366,7 @@ export default function RolesPage() {
 
                   {formData.skills.length === 0 ? (
                     <div className="text-sm text-muted-foreground p-3 border border-dashed rounded">
-                      No skills added yet. Click "Add Skill" to add required
-                      skills for this role.
+                      No skills added yet. Click "Add Skill" to add required skills for this role.
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -386,7 +376,9 @@ export default function RolesPage() {
                           className="flex gap-2 items-end p-3 border rounded-lg bg-muted/30"
                         >
                           <div className="flex-1">
-                            <Label className="text-xs mb-1 block">Skill</Label>
+                            <Label className="text-xs mb-1 block">
+                              Skill
+                            </Label>
                             {skill.skill_name ? (
                               <div className="flex items-center gap-2 p-2 rounded bg-accent/20 border border-accent/30">
                                 <CheckCircle className="h-4 w-4 text-accent" />
@@ -401,17 +393,13 @@ export default function RolesPage() {
                                     const newSkills = [...formData.skills];
                                     newSkills[index].skill_id = 0;
                                     newSkills[index].skill_name = "";
-                                    setFormData({
-                                      ...formData,
-                                      skills: newSkills,
-                                    });
+                                    setFormData({ ...formData, skills: newSkills });
                                   }}
                                 >
                                   ✕
                                 </Button>
                               </div>
-                            ) : showSkillCreator &&
-                              selectedSkillIndex === index ? (
+                            ) : showSkillCreator && selectedSkillIndex === index ? (
                               <div className="space-y-2">
                                 <Input
                                   value={newSkillName}
@@ -451,22 +439,20 @@ export default function RolesPage() {
                                     handleSearchSkills(e.target.value, index)
                                   }
                                 />
-                                {skillSearchQuery &&
-                                  selectedSkillIndex === index &&
-                                  searchResults.length > 0 && (
-                                    <div className="border rounded-lg max-h-32 overflow-y-auto bg-white">
-                                      {searchResults.map((s) => (
-                                        <button
-                                          key={s.id}
-                                          onClick={() => handleSelectSkill(s)}
-                                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
-                                        >
-                                          <Search className="h-3 w-3" />
-                                          {s.name}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  )}
+                                {skillSearchQuery && selectedSkillIndex === index && searchResults.length > 0 && (
+                                  <div className="border rounded-lg max-h-32 overflow-y-auto bg-white">
+                                    {searchResults.map((s) => (
+                                      <button
+                                        key={s.id}
+                                        onClick={() => handleSelectSkill(s)}
+                                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2"
+                                      >
+                                        <Search className="h-3 w-3" />
+                                        {s.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                                 {skillSearchQuery &&
                                   selectedSkillIndex === index &&
                                   searchResults.length === 0 && (
@@ -491,10 +477,7 @@ export default function RolesPage() {
                               Required Level
                             </Label>
                             <Select
-                              value={
-                                skill.required_proficiency_level_id?.toString() ||
-                                ""
-                              }
+                              value={skill.required_proficiency_level_id?.toString() || ""}
                               onValueChange={(value) =>
                                 handleUpdateSkillLevel(index, parseInt(value))
                               }
@@ -528,7 +511,9 @@ export default function RolesPage() {
                   )}
                 </div>
 
-                {error && <p className="text-sm text-destructive">{error}</p>}
+                {error && (
+                  <p className="text-sm text-destructive">{error}</p>
+                )}
               </div>
               <DialogFooter>
                 <Button
