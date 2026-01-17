@@ -47,13 +47,13 @@ export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
-      <aside
+      {/* <aside
         className={cn(
           "fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-sidebar transition-all duration-300 md:static md:z-auto",
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
-        <div className="flex h-full flex-col">
+        <div className="flex h-full flex-col"> */}
           {/* Logo/Brand */}
           {/* <div className="flex items-center justify-between border-b border-sidebar-border px-6 py-4">
             <Link to="/" className="flex items-center gap-2">
@@ -70,7 +70,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
             </button>
           </div> */}
 
-          {/* Navigation */}
+          {/* Navigation
           <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
             {navigationItems.map((item) => {
               const Icon = item.icon;
@@ -91,18 +91,18 @@ export default function AppLayout({ children }: AppLayoutProps) {
                 </Link>
               );
             })}
-          </nav>
+          </nav> */}
 
           {/* Footer */}
-        </div>
-      </aside>
+        {/* </div> */}
+      {/* </aside> */}
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
         {/* Mobile Header */}
-        <div className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur md:hidden">
+        {/* <div className="sticky top-0 z-40 border-b border-border bg-card/80 backdrop-blur md:hidden">
           <div className="flex items-center justify-between px-4 py-3">
-            {/* <h1 className="font-bold text-foreground">MatrixPro</h1> */}
+            <h1 className="font-bold text-foreground">MatrixPro</h1>
             <button
               onClick={() => setMobileMenuOpen(true)}
               className="p-2 hover:bg-muted rounded-lg"
@@ -110,7 +110,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
               <Menu className="h-5 w-5 text-foreground" />
             </button>
           </div>
-        </div>
+        </div> */}
 
         {/* Content */}
         <div className="animate-fade-in">
@@ -119,12 +119,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
       </main>
 
       {/* Mobile Overlay */}
-      {mobileMenuOpen && (
+      {/* {mobileMenuOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/50 md:hidden"
           onClick={() => setMobileMenuOpen(false)}
         />
-      )}
+      )} */}
     </div>
   );
 }
